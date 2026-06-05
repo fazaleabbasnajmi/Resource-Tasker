@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Resource Tasker
 
 A simple JIRA-like intranet task manager built with Flask and SQLite.
@@ -64,3 +65,7 @@ Example:
 PORT=9090 python app.py
 ```
 
+=======
+# Resource-Tasker
+A simple portal to assign and tracker tasks on a kanban board
+>>>>>>> 073f2cac67bba8980b2806d3dd4ee1242421c457
