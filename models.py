@@ -54,6 +54,7 @@ class Task(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
+    source_message_id = db.Column(db.String(255), nullable=True)
     status = db.Column(db.String(30), nullable=False, default='todo')
     # todo, inprogress, review, done, blocked
     priority = db.Column(db.String(20), nullable=False, default='medium')

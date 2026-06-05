@@ -138,6 +138,41 @@ with app.test_client() as client:
         assert main_task is not None
         assert (main_task.logged_hours or 0) >= 1.5
 
+    # Email webhook should create a new task.
+    response = client.post(
+        '/email/intake',
+        json={
+            'from': 'helpdesk@company.local',
+            'subject': f'Email Issue {uniq}',
+            'text': 'Issue reported through email.',
+            'project_id': project_id,
+            'priority': 'high',
+            'message_id': f'<email-{uniq}@company.local>',
+        },
+    )
+    assert response.status_code == 201
+    assert response.json['success'] is True
+
+    with app.app_context():
+        email_task = db.session.get(Task, response.json['task_id'])
+        assert email_task is not None
+        assert email_task.project_id == project_id
+        assert email_task.status == 'todo'
+
+    duplicate_response = client.post(
+        '/email/intake',
+        json={
+            'from': 'helpdesk@company.local',
+            'subject': f'Email Issue {uniq}',
+            'text': 'Issue reported through email.',
+            'project_id': project_id,
+            'priority': 'high',
+            'message_id': f'<email-{uniq}@company.local>',
+        },
+    )
+    assert duplicate_response.status_code == 200
+    assert duplicate_response.json['created'] is False
+
     response = client.get('/logout', follow_redirects=True)
     assert response.status_code == 200
 
