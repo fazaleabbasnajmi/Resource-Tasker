@@ -47,10 +47,12 @@
                 <span class="qs-label">Move to:</span>
                 <div class="qs-buttons">
                     {% for s, label, icon in [('todo','To Do','📌'),('inprogress','In Progress','🔄'),('review','In Review','🔍'),('done','Done','✅'),('blocked','Blocked','🚫')] %}
+                    {% if s in allowed_statuses %}
                     <button class="qs-btn {% if task.status == s %}qs-btn-active{% endif %} status-color-{{ s }}"
                             onclick="quickStatus('{{ task.id }}', '{{ s }}', this)">
                         {{ icon }} {{ label }}
                     </button>
+                    {% endif %}
                     {% endfor %}
                 </div>
             </div>
@@ -181,6 +183,16 @@
                 <div class="info-row">
                     <span class="info-label">Logged</span>
                     <span class="info-value">{{ task.logged_hours ~ 'h' }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Log Time</span>
+                    <span class="info-value">
+                        <form method="POST" action="{{ url_for('tasks.log_time', task_id=task.id) }}" style="display:flex; gap:6px; align-items:center; justify-content:flex-end;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="number" name="hours" class="form-control" min="0.25" step="0.25" placeholder="h" style="width:80px">
+                            <button type="submit" class="btn btn-primary btn-sm">Add</button>
+                        </form>
+                    </span>
                 </div>
                 {% if task.estimated_hours and task.estimated_hours > 0 %}
                 <div class="info-row">

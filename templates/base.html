@@ -33,6 +33,9 @@
                 <a href="{{ url_for('tasks.task_list') }}" class="nav-item {% if request.endpoint == 'tasks.task_list' %}active{% endif %}">
                     <span class="nav-icon">📝</span><span class="nav-label">All Tasks</span>
                 </a>
+                <a href="{{ url_for('projects.list_projects') }}" class="nav-item {% if 'projects' in request.endpoint %}active{% endif %}">
+                    <span class="nav-icon">📁</span><span class="nav-label">Projects</span>
+                </a>
                 <a href="{{ url_for('tasks.create_task') }}" class="nav-item {% if request.endpoint == 'tasks.create_task' %}active{% endif %}">
                     <span class="nav-icon">➕</span><span class="nav-label">New Task</span>
                 </a>

@@ -2,7 +2,8 @@ import re
 import uuid
 
 from app import create_app
-from models import Task, User
+from extensions import db
+from models import Task, User, Project
 
 app = create_app()
 app.config['TESTING'] = True
@@ -33,6 +34,25 @@ with app.test_client() as client:
 
     uniq = uuid.uuid4().hex[:8]
 
+    # Create a project and use it for new tasks.
+    projects_page = client.get('/projects')
+    assert projects_page.status_code == 200
+    csrf = extract_csrf(projects_page.get_data(as_text=True))
+    project_name = f'Ops {uniq}'
+    response = client.post('/projects/create', data={
+        'name': project_name,
+        'description': 'Smoke test project',
+        'color': '#4F6BED',
+        'csrf_token': csrf,
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    assert project_name in response.get_data(as_text=True)
+
+    with app.app_context():
+        project = Project.query.filter_by(name=project_name).first()
+        assert project is not None
+        project_id = project.id
+
     create_page = client.get('/tasks/create')
     assert create_page.status_code == 200
     csrf = extract_csrf(create_page.get_data(as_text=True))
@@ -43,7 +63,7 @@ with app.test_client() as client:
         'status': 'todo',
         'priority': 'high',
         'task_type': 'task',
-        'project_id': '1',
+        'project_id': str(project_id),
         'assignee_id': '2',
         'estimated_hours': '2',
         'csrf_token': csrf,
@@ -65,7 +85,7 @@ with app.test_client() as client:
         'status': 'inprogress',
         'priority': 'medium',
         'task_type': 'story',
-        'project_id': '1',
+        'project_id': str(project_id),
         'assignee_id': '3',
         'dependencies': [str(dep_id)],
         'csrf_token': csrf,
@@ -80,6 +100,7 @@ with app.test_client() as client:
         assert main_task is not None
         main_id = main_task.id
         assert main_task.depends_on.count() == 1
+        assert main_task.project_id == project_id
 
     detail_page = client.get(f'/tasks/{main_id}')
     assert detail_page.status_code == 200
@@ -92,6 +113,30 @@ with app.test_client() as client:
     assert response.status_code == 200, response.get_data(as_text=True)
     assert response.json['success'] is True
     assert response.json['status'] == 'done'
+
+    # Task should not move back to To Do after work starts/completes.
+    detail_page = client.get(f'/tasks/{main_id}')
+    csrf = extract_csrf(detail_page.get_data(as_text=True))
+    response = client.post(
+        f'/tasks/{main_id}/status',
+        data={'status': 'todo'},
+        headers={'X-CSRFToken': csrf},
+    )
+    assert response.status_code == 400
+    assert 'cannot move back to To Do' in response.json['error']
+
+    # Log explicit work time and verify progress data source is updated.
+    response = client.post(
+        f'/tasks/{main_id}/log-time',
+        data={'hours': '1.5', 'csrf_token': csrf},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    with app.app_context():
+        main_task = db.session.get(Task, main_id)
+        assert main_task is not None
+        assert (main_task.logged_hours or 0) >= 1.5
 
     response = client.get('/logout', follow_redirects=True)
     assert response.status_code == 200
@@ -114,7 +159,7 @@ with app.test_client() as client:
         'status': 'todo',
         'priority': 'low',
         'task_type': 'task',
-        'project_id': '1',
+        'project_id': str(project_id),
         'assignee_id': '3',
         'csrf_token': csrf,
     }, follow_redirects=True)

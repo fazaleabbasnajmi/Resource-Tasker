@@ -76,7 +76,9 @@
                 <!-- Quick status changer -->
                 <div class="quick-status" onclick="event.stopPropagation()">
                     <select class="status-select" onchange="quickStatusChange({{ task.id }}, this.value, this)">
+                        {% if task.status == 'todo' %}
                         <option value="todo" {% if task.status == 'todo' %}selected{% endif %}>📌 To Do</option>
+                        {% endif %}
                         <option value="inprogress" {% if task.status == 'inprogress' %}selected{% endif %}>🔄 In Progress</option>
                         <option value="review" {% if task.status == 'review' %}selected{% endif %}>🔍 In Review</option>
                         <option value="done" {% if task.status == 'done' %}selected{% endif %}>✅ Done</option>
