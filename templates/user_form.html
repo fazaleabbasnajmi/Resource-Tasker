@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% set editing = user is not none %}
+{% block title %}{% if editing %}Edit User{% else %}Add User{% endif %} – Resource Tasker{% endblock %}
+{% block page_title %}{% if editing %}Edit User{% else %}Add New User{% endif %}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('users.user_list') }}" class="btn btn-secondary btn-sm">← Back to Users</a>
+{% endblock %}
+
+{% block content %}
+<div class="form-page form-page-sm">
+    <div class="form-card">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label class="form-label required">Full Name</label>
+                <input type="text" name="full_name" class="form-control"
+                       placeholder="Jane Doe" value="{{ user.full_name if editing else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label required">Username</label>
+                <input type="text" name="username" class="form-control"
+                       placeholder="jdoe" value="{{ user.username if editing else '' }}"
+                       {% if editing %}readonly{% endif %} required>
+            </div>
+            <div class="form-group">
+                <label class="form-label required">Email</label>
+                <input type="email" name="email" class="form-control"
+                       placeholder="jane@company.local" value="{{ user.email if editing else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Role</label>
+                <select name="role" class="form-select">
+                    <option value="user" {% if not editing or user.role == 'user' %}selected{% endif %}>User</option>
+                    <option value="manager" {% if editing and user.role == 'manager' %}selected{% endif %}>Manager</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label {% if not editing %}required{% endif %}">
+                    Password {% if editing %}<span class="form-hint-inline">(leave blank to keep current)</span>{% endif %}
+                </label>
+                <input type="password" name="password" class="form-control"
+                       placeholder="{% if editing %}New password (optional){% else %}Set a password{% endif %}"
+                       {% if not editing %}required{% endif %}>
+            </div>
+            {% if editing %}
+            <div class="form-group">
+                <label class="form-check-label">
+                    <input type="checkbox" name="is_active" {% if user.is_active %}checked{% endif %}>
+                    Active (can log in)
+                </label>
+            </div>
+            {% endif %}
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                    {% if editing %}💾 Save Changes{% else %}✅ Create User{% endif %}
+                </button>
+                <a href="{{ url_for('users.user_list') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

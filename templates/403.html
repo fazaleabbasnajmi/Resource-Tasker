@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Access Denied – Resource Tasker{% endblock %}
+{% block page_title %}Access Denied{% endblock %}
+
+{% block content %}
+<div class="empty-state">
+    <div class="empty-icon">🔒</div>
+    <h3>You do not have access to this page</h3>
+    <p>This task or action is not available for your account.</p>
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">Go to Dashboard</a>
+</div>
+{% endblock %}
+

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}My Profile – Resource Tasker{% endblock %}
+{% block page_title %}My Profile{% endblock %}
+
+{% block content %}
+<div class="form-page form-page-sm">
+    <div class="form-card profile-card">
+        <div class="profile-header">
+            <div class="avatar avatar-xl" style="background: {{ current_user.avatar_color }}">
+                {{ current_user.initials() }}
+            </div>
+            <div>
+                <h2>{{ current_user.full_name }}</h2>
+                <span class="role-badge role-{{ current_user.role }}">{{ current_user.role | capitalize }}</span>
+                <p class="muted">@{{ current_user.username }}</p>
+            </div>
+        </div>
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <h3>Personal Info</h3>
+            <div class="form-group">
+                <label class="form-label required">Full Name</label>
+                <input type="text" name="full_name" class="form-control"
+                       value="{{ current_user.full_name }}" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label required">Email</label>
+                <input type="email" name="email" class="form-control"
+                       value="{{ current_user.email }}" required>
+            </div>
+
+            <h3 class="mt-4">Change Password</h3>
+            <div class="form-group">
+                <label class="form-label">Current Password</label>
+                <input type="password" name="current_password" class="form-control" placeholder="Required to change password">
+            </div>
+            <div class="form-group">
+                <label class="form-label">New Password</label>
+                <input type="password" name="new_password" class="form-control" placeholder="Leave blank to keep current">
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

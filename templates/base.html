@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Resource Tasker{% endblock %}</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+{% if current_user.is_authenticated %}
+<div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <span class="logo-icon">⚡</span>
+                <span class="logo-text">ResourceTasker</span>
+            </div>
+            <button class="sidebar-toggle" id="sidebarToggle">&#9776;</button>
+        </div>
+
+        <nav class="sidebar-nav">
+            <div class="nav-section">
+                <a href="{{ url_for('main.dashboard') }}" class="nav-item {% if request.endpoint == 'main.dashboard' %}active{% endif %}">
+                    <span class="nav-icon">🏠</span><span class="nav-label">Dashboard</span>
+                </a>
+                <a href="{{ url_for('tasks.board') }}" class="nav-item {% if request.endpoint == 'tasks.board' %}active{% endif %}">
+                    <span class="nav-icon">📋</span><span class="nav-label">Board</span>
+                </a>
+                <a href="{{ url_for('tasks.task_list') }}" class="nav-item {% if request.endpoint == 'tasks.task_list' %}active{% endif %}">
+                    <span class="nav-icon">📝</span><span class="nav-label">All Tasks</span>
+                </a>
+                <a href="{{ url_for('tasks.create_task') }}" class="nav-item {% if request.endpoint == 'tasks.create_task' %}active{% endif %}">
+                    <span class="nav-icon">➕</span><span class="nav-label">New Task</span>
+                </a>
+            </div>
+            {% if current_user.is_manager() %}
+            <div class="nav-section">
+                <div class="nav-section-title">Management</div>
+                <a href="{{ url_for('users.user_list') }}" class="nav-item {% if 'users' in request.endpoint %}active{% endif %}">
+                    <span class="nav-icon">👥</span><span class="nav-label">Users</span>
+                </a>
+                <a href="{{ url_for('users.create_user') }}" class="nav-item">
+                    <span class="nav-icon">👤</span><span class="nav-label">Add User</span>
+                </a>
+            </div>
+            {% endif %}
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="avatar" style="background: {{ current_user.avatar_color }}">
+                    {{ current_user.initials() }}
+                </div>
+                <div class="user-details">
+                    <div class="user-name">{{ current_user.full_name }}</div>
+                    <div class="user-role">{{ current_user.role | capitalize }}</div>
+                </div>
+            </div>
+            <div class="footer-links">
+                <a href="{{ url_for('auth.profile') }}" class="footer-link">Profile</a>
+                <a href="{{ url_for('auth.logout') }}" class="footer-link logout">Logout</a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main content -->
+    <div class="main-content">
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="mobile-toggle" id="mobileToggle">&#9776;</button>
+                <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
+            </div>
+            <div class="topbar-right">
+                {% block topbar_actions %}{% endblock %}
+            </div>
+        </header>
+
+        <div class="content-area">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flash-messages">
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    <span>{{ message }}</span>
+                    <button class="alert-close" onclick="this.parentElement.remove()">×</button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</div>
+{% else %}
+{% block auth_content %}{% endblock %}
+{% endif %}
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
+

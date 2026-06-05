@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% set editing = task is not none %}
+{% block title %}{% if editing %}Edit {{ task.task_key() }}{% else %}New Task{% endif %} – Resource Tasker{% endblock %}
+{% block page_title %}{% if editing %}Edit {{ task.task_key() }}{% else %}Create New Task{% endif %}{% endblock %}
+
+{% block topbar_actions %}
+{% if editing %}
+<a href="{{ url_for('tasks.task_detail', task_id=task.id) }}" class="btn btn-secondary btn-sm">← Back to Task</a>
+{% else %}
+<a href="{{ url_for('tasks.board') }}" class="btn btn-secondary btn-sm">← Board</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="form-page">
+    <form method="POST" class="task-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-layout">
+            <!-- Main Column -->
+            <div class="form-main">
+                <div class="form-card">
+                    <div class="form-group">
+                        <label for="title" class="form-label required">Task Title</label>
+                        <input type="text" id="title" name="title" class="form-control form-control-lg"
+                               placeholder="What needs to be done?"
+                               value="{{ task.title if editing else '' }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea id="description" name="description" class="form-control form-textarea"
+                                  placeholder="Add more details, acceptance criteria, or notes…" rows="6">{{ task.description if editing else '' }}</textarea>
+                    </div>
+                </div>
+
+                <!-- Dependencies -->
+                <div class="form-card">
+                    <h3 class="form-card-title">🔗 Dependencies</h3>
+                    <p class="form-hint">Select tasks that must be completed before this task can start.</p>
+                    <div class="dep-search-wrap">
+                        <input type="text" id="depSearch" class="form-control" placeholder="Search tasks to add as dependency…">
+                    </div>
+                    <div class="dep-list" id="depList">
+                        {% if all_tasks %}
+                        {% for t in all_tasks %}
+                        {% set is_dep = editing and t in task.depends_on.all() %}
+                        <label class="dep-item {% if is_dep %}dep-selected{% endif %}" data-title="{{ t.title | lower }}">
+                            <input type="checkbox" name="dependencies" value="{{ t.id }}"
+                                   {% if is_dep %}checked{% endif %}>
+                            <span class="dep-key">{{ t.task_key() }}</span>
+                            <span class="dep-title">{{ t.title }}</span>
+                            <span class="status-badge status-{{ t.status }}">{{ t.status_label() }}</span>
+                        </label>
+                        {% endfor %}
+                        {% else %}
+                        <div class="empty-state-sm">No other tasks available.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Side Column -->
+            <div class="form-side">
+                <div class="form-card">
+                    <h3 class="form-card-title">Details</h3>
+
+                    <div class="form-group">
+                        <label class="form-label">Status</label>
+                        <select name="status" class="form-select">
+                            <option value="todo" {% if not editing or task.status == 'todo' %}selected{% endif %}>📌 To Do</option>
+                            <option value="inprogress" {% if editing and task.status == 'inprogress' %}selected{% endif %}>🔄 In Progress</option>
+                            <option value="review" {% if editing and task.status == 'review' %}selected{% endif %}>🔍 In Review</option>
+                            <option value="done" {% if editing and task.status == 'done' %}selected{% endif %}>✅ Done</option>
+                            <option value="blocked" {% if editing and task.status == 'blocked' %}selected{% endif %}>🚫 Blocked</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Priority</label>
+                        <select name="priority" class="form-select">
+                            <option value="low" {% if editing and task.priority == 'low' %}selected{% endif %}>🟢 Low</option>
+                            <option value="medium" {% if not editing or task.priority == 'medium' %}selected{% endif %}>🟡 Medium</option>
+                            <option value="high" {% if editing and task.priority == 'high' %}selected{% endif %}>🟠 High</option>
+                            <option value="critical" {% if editing and task.priority == 'critical' %}selected{% endif %}>🔴 Critical</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Type</label>
+                        <select name="task_type" class="form-select">
+                            <option value="task" {% if not editing or task.task_type == 'task' %}selected{% endif %}>📋 Task</option>
+                            <option value="bug" {% if editing and task.task_type == 'bug' %}selected{% endif %}>🐛 Bug</option>
+                            <option value="story" {% if editing and task.task_type == 'story' %}selected{% endif %}>📖 Story</option>
+                            <option value="improvement" {% if editing and task.task_type == 'improvement' %}selected{% endif %}>⬆️ Improvement</option>
+                        </select>
+                    </div>
+
+                    {% if current_user.is_manager() %}
+                    <div class="form-group">
+                        <label class="form-label">Project</label>
+                        <select name="project_id" class="form-select">
+                            {% for p in projects %}
+                            <option value="{{ p.id }}" {% if editing and task.project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Assignee</label>
+                        <select name="assignee_id" class="form-select">
+                            <option value="">— Unassigned —</option>
+                            {% for u in users %}
+                            <option value="{{ u.id }}"
+                                {% if editing and task.assignee_id == u.id %}selected
+                                {% elif not editing and u.id == current_user.id %}selected{% endif %}>
+                                {{ u.full_name }} ({{ u.role }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    <div class="form-group">
+                        <label class="form-label">Due Date</label>
+                        <input type="date" name="due_date" class="form-control"
+                               value="{{ task.due_date.strftime('%Y-%m-%d') if editing and task.due_date else '' }}">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Estimated Hours</label>
+                        <input type="number" name="estimated_hours" class="form-control"
+                               min="0" step="0.5" placeholder="e.g. 4"
+                               value="{{ task.estimated_hours if editing and task.estimated_hours else '' }}">
+                    </div>
+
+                    {% if editing %}
+                    <div class="form-group">
+                        <label class="form-label">Logged Hours</label>
+                        <input type="number" name="logged_hours" class="form-control"
+                               min="0" step="0.5"
+                               value="{{ task.logged_hours if task.logged_hours else '0' }}">
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary btn-full">
+                        {% if editing %}💾 Save Changes{% else %}✅ Create Task{% endif %}
+                    </button>
+                    {% if editing %}
+                    <button type="button" class="btn btn-danger btn-full btn-delete"
+                            onclick="confirmDelete('{{ task.task_key() }}', {{ task.id }})">
+                        🗑 Delete Task
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Delete confirmation modal -->
+{% if editing %}
+<div id="deleteModal" class="modal-overlay" style="display:none">
+    <div class="modal-box">
+        <h3>Delete Task</h3>
+        <p>Are you sure you want to delete <strong id="deleteTaskKey"></strong>? This cannot be undone.</p>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="document.getElementById('deleteModal').style.display='none'">Cancel</button>
+            <form id="deleteForm" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-danger">Yes, Delete</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Dependency search filter
+document.getElementById('depSearch')?.addEventListener('input', function() {
+    const q = this.value.toLowerCase();
+    document.querySelectorAll('.dep-item').forEach(item => {
+        item.style.display = item.dataset.title.includes(q) ? '' : 'none';
+    });
+});
+
+// Highlight selected deps
+document.querySelectorAll('.dep-item input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', function() {
+        this.closest('.dep-item').classList.toggle('dep-selected', this.checked);
+    });
+});
+
+{% if editing %}
+function confirmDelete(key, id) {
+    document.getElementById('deleteTaskKey').textContent = key;
+    document.getElementById('deleteForm').action = `/tasks/${id}/delete`;
+    document.getElementById('deleteModal').style.display = 'flex';
+}
+{% endif %}
+</script>
+{% endblock %}
+

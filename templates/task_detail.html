@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block title %}{{ task.task_key() }} – Resource Tasker{% endblock %}
+{% block page_title %}{{ task.task_key() }}{% endblock %}
+
+{% block topbar_actions %}
+<div class="topbar-group">
+    <a href="{{ url_for('tasks.board') }}" class="btn btn-secondary btn-sm">← Board</a>
+    {% if current_user.is_manager() or task.creator_id == current_user.id or task.assignee_id == current_user.id %}
+    <a href="{{ url_for('tasks.edit_task', task_id=task.id) }}" class="btn btn-primary btn-sm">✏️ Edit</a>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="detail-layout">
+    <!-- Main area -->
+    <div class="detail-main">
+        <!-- Task Header -->
+        <div class="detail-card">
+            <div class="detail-task-header">
+                <div class="detail-badges">
+                    <span class="task-type-badge type-{{ task.task_type }}">{{ task.task_type }}</span>
+                    <span class="priority-badge priority-{{ task.priority }}">{{ task.priority_label() }}</span>
+                    <span class="status-badge status-{{ task.status }}">{{ task.status_label() }}</span>
+                    {% if task.is_overdue() %}<span class="badge-overdue">⚠️ Overdue</span>{% endif %}
+                </div>
+                <h2 class="detail-title">{{ task.title }}</h2>
+                <div class="detail-meta">
+                    <span>Created by <strong>{{ task.creator.full_name }}</strong></span>
+                    <span>{{ task.created_at.strftime('%b %d, %Y at %H:%M') }}</span>
+                    {% if task.updated_at != task.created_at %}
+                    <span>Updated {{ task.updated_at.strftime('%b %d, %Y') }}</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if task.description %}
+            <div class="detail-description">
+                <h4>Description</h4>
+                <div class="description-body">{{ task.description }}</div>
+            </div>
+            {% endif %}
+
+            <!-- Quick Status Update -->
+            {% if current_user.is_manager() or task.assignee_id == current_user.id or task.creator_id == current_user.id %}
+            <div class="quick-status-panel">
+                <span class="qs-label">Move to:</span>
+                <div class="qs-buttons">
+                    {% for s, label, icon in [('todo','To Do','📌'),('inprogress','In Progress','🔄'),('review','In Review','🔍'),('done','Done','✅'),('blocked','Blocked','🚫')] %}
+                    <button class="qs-btn {% if task.status == s %}qs-btn-active{% endif %} status-color-{{ s }}"
+                            onclick="quickStatus('{{ task.id }}', '{{ s }}', this)">
+                        {{ icon }} {{ label }}
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Dependencies -->
+        {% if depends_on or blocking %}
+        <div class="detail-card">
+            <h3 class="detail-section-title">🔗 Dependencies</h3>
+            {% if depends_on %}
+            <div class="dep-section">
+                <div class="dep-section-label">This task depends on:</div>
+                <div class="dep-tags">
+                    {% for dep in depends_on %}
+                    <a href="{{ url_for('tasks.task_detail', task_id=dep.id) }}" class="dep-tag">
+                        <span class="dep-tag-key">{{ dep.task_key() }}</span>
+                        <span class="dep-tag-title">{{ dep.title }}</span>
+                        <span class="status-badge status-{{ dep.status }}">{{ dep.status_label() }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% if blocking %}
+            <div class="dep-section">
+                <div class="dep-section-label">Blocking these tasks:</div>
+                <div class="dep-tags">
+                    {% for dep in blocking %}
+                    <a href="{{ url_for('tasks.task_detail', task_id=dep.id) }}" class="dep-tag dep-tag-blocking">
+                        <span class="dep-tag-key">{{ dep.task_key() }}</span>
+                        <span class="dep-tag-title">{{ dep.title }}</span>
+                        <span class="status-badge status-{{ dep.status }}">{{ dep.status_label() }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Comments -->
+        <div class="detail-card" id="comments">
+            <h3 class="detail-section-title">💬 Comments ({{ comments | length }})</h3>
+            <div class="comments-list">
+                {% for comment in comments %}
+                <div class="comment">
+                    <div class="avatar avatar-sm" style="background: {{ comment.author.avatar_color }}">
+                        {{ comment.author.initials() }}
+                    </div>
+                    <div class="comment-body">
+                        <div class="comment-header">
+                            <strong>{{ comment.author.full_name }}</strong>
+                            <span class="comment-time">{{ comment.created_at.strftime('%b %d, %Y at %H:%M') }}</span>
+                        </div>
+                        <div class="comment-text">{{ comment.content }}</div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="empty-state-sm">No comments yet. Be the first to comment.</div>
+                {% endfor %}
+            </div>
+
+            <form method="POST" action="{{ url_for('tasks.add_comment', task_id=task.id) }}" class="comment-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="comment-input-row">
+                    <div class="avatar avatar-sm" style="background: {{ current_user.avatar_color }}">
+                        {{ current_user.initials() }}
+                    </div>
+                    <textarea name="content" class="form-control" rows="3"
+                              placeholder="Write a comment…" required></textarea>
+                </div>
+                <div class="comment-submit">
+                    <button type="submit" class="btn btn-primary btn-sm">Add Comment</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Activity Log -->
+        {% if activity %}
+        <div class="detail-card">
+            <h3 class="detail-section-title">📜 Activity</h3>
+            <div class="activity-list">
+                {% for log in activity %}
+                <div class="activity-item">
+                    <div class="activity-dot"></div>
+                    <div class="activity-content">
+                        <span class="activity-text">{{ log.action }}</span>
+                        <span class="activity-time">{{ log.created_at.strftime('%b %d at %H:%M') }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Sidebar -->
+    <div class="detail-side">
+        <div class="detail-card">
+            <h3 class="detail-section-title">Info</h3>
+            <div class="info-grid">
+                <div class="info-row">
+                    <span class="info-label">Assignee</span>
+                    <span class="info-value">
+                        {% if task.assignee %}
+                        <div class="info-user">
+                            <div class="avatar avatar-xs" style="background: {{ task.assignee.avatar_color }}">{{ task.assignee.initials() }}</div>
+                            {{ task.assignee.full_name }}
+                        </div>
+                        {% else %}<span class="muted">Unassigned</span>{% endif %}
+                    </span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Project</span>
+                    <span class="info-value">{{ task.project.name }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Due Date</span>
+                    <span class="info-value {% if task.is_overdue() %}overdue-text{% endif %}">
+                        {{ task.due_date.strftime('%B %d, %Y') if task.due_date else '—' }}
+                    </span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Estimated</span>
+                    <span class="info-value">{{ task.estimated_hours ~ 'h' if task.estimated_hours else '—' }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Logged</span>
+                    <span class="info-value">{{ task.logged_hours ~ 'h' }}</span>
+                </div>
+                {% if task.estimated_hours and task.estimated_hours > 0 %}
+                <div class="info-row">
+                    <span class="info-label">Progress</span>
+                    <span class="info-value">
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar-fill" style="width: {{ [((task.logged_hours or 0) / task.estimated_hours * 100), 100] | min }}%"></div>
+                        </div>
+                        <span class="progress-pct">{{ ((task.logged_hours or 0) / task.estimated_hours * 100) | int }}%</span>
+                    </span>
+                </div>
+                {% endif %}
+                <div class="info-row">
+                    <span class="info-label">Creator</span>
+                    <span class="info-value">{{ task.creator.full_name }}</span>
+                </div>
+            </div>
+        </div>
+
+        {% if current_user.is_manager() or task.creator_id == current_user.id %}
+        <div class="detail-card danger-zone">
+            <h3 class="detail-section-title">⚠️ Danger Zone</h3>
+            <form method="POST" action="{{ url_for('tasks.delete_task', task_id=task.id) }}"
+                  onsubmit="return confirm('Delete this task permanently?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-danger btn-full btn-sm">🗑 Delete Task</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+function quickStatus(taskId, status, btn) {
+    fetch(`/tasks/${taskId}/status`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrfToken
+        },
+        body: `status=${status}`
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            document.querySelectorAll('.qs-btn').forEach(b => b.classList.remove('qs-btn-active'));
+            btn.classList.add('qs-btn-active');
+            // Update the badge
+            const badge = document.querySelector('.status-badge');
+            if (badge) { badge.className = `status-badge status-${status}`; badge.textContent = data.label; }
+            showToast('Status updated!');
+        } else if (data.error) {
+            showToast(data.error);
+        }
+    });
+}
+
+function showToast(msg) {
+    const t = document.createElement('div');
+    t.className = 'toast toast-success show';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 2000);
+}
+</script>
+{% endblock %}
+

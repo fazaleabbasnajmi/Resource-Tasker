@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Users – Resource Tasker{% endblock %}
+{% block page_title %}Team Members{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('users.create_user') }}" class="btn btn-primary btn-sm">+ Add User</a>
+{% endblock %}
+
+{% block content %}
+<div class="users-grid">
+    {% for user in users %}
+    <div class="user-card {% if not user.is_active %}user-card-inactive{% endif %}">
+        <div class="user-card-header">
+            <div class="avatar avatar-lg" style="background: {{ user.avatar_color }}">
+                {{ user.initials() }}
+            </div>
+            <div class="user-card-info">
+                <h3>{{ user.full_name }}</h3>
+                <span class="username">@{{ user.username }}</span>
+                <span class="role-badge role-{{ user.role }}">{{ user.role | capitalize }}</span>
+            </div>
+        </div>
+        <div class="user-card-body">
+            <div class="user-stat">
+                <span class="user-stat-label">Active Tasks</span>
+                <span class="user-stat-value">{{ user.assigned_tasks.filter_by(status='inprogress').count() }}</span>
+            </div>
+            <div class="user-stat">
+                <span class="user-stat-label">Total Assigned</span>
+                <span class="user-stat-value">{{ user.assigned_tasks.count() }}</span>
+            </div>
+            <div class="user-stat">
+                <span class="user-stat-label">Completed</span>
+                <span class="user-stat-value">{{ user.assigned_tasks.filter_by(status='done').count() }}</span>
+            </div>
+        </div>
+        <div class="user-card-footer">
+            <span class="user-email">{{ user.email }}</span>
+            <div class="user-actions">
+                <a href="{{ url_for('users.edit_user', user_id=user.id) }}" class="btn btn-ghost btn-sm">Edit</a>
+                {% if user.id != current_user.id %}
+                <form method="POST" action="{{ url_for('users.toggle_user', user_id=user.id) }}" style="display:inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-ghost btn-sm">
+                        {{ 'Disable' if user.is_active else 'Enable' }}
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% if not user.is_active %}
+        <div class="inactive-overlay">Disabled</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
