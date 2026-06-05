@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Projects – Resource Tasker{% endblock %}
+{% block page_title %}Projects{% endblock %}
+
+{% block content %}
+<div class="dashboard-grid">
+    <div class="dash-panel">
+        <div class="panel-header">
+            <h3>All Projects</h3>
+        </div>
+        <div class="task-mini-list">
+            {% for p in projects %}
+            <a href="{{ url_for('tasks.board', project_id=p.id) }}" class="task-mini-item">
+                <div class="task-mini-left">
+                    <span class="task-key-badge" style="background: {{ p.color }}22; color: {{ p.color }}">P-{{ p.id }}</span>
+                    <span class="task-mini-title">{{ p.name }}</span>
+                </div>
+                <div class="task-mini-right">
+                    <span class="status-badge status-todo">{{ task_counts[p.id] }} tasks</span>
+                </div>
+            </a>
+            {% if p.description %}
+            <div class="empty-state-sm" style="text-align:left; padding-top:0">{{ p.description }}</div>
+            {% endif %}
+            {% else %}
+            <div class="empty-state-sm">No projects yet.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="dash-panel">
+        <div class="panel-header">
+            <h3>Create Project</h3>
+        </div>
+        <div style="padding:16px">
+            <form method="POST" action="{{ url_for('projects.create_project') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label class="form-label required" for="name">Name</label>
+                    <input id="name" name="name" class="form-control" required placeholder="Project name">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="description">Description</label>
+                    <textarea id="description" name="description" class="form-control" rows="4" placeholder="Short description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="color">Color</label>
+                    <input id="color" type="color" name="color" class="form-control" value="#4F6BED">
+                </div>
+                <button class="btn btn-primary" type="submit">Create Project</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

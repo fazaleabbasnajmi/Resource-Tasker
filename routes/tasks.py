@@ -16,11 +16,37 @@ def can_access_task(task):
     return current_user.is_manager() or task.creator_id == current_user.id or task.assignee_id == current_user.id
 
 
+def is_valid_status_transition(old_status, new_status):
+    # Once a task leaves To Do, it cannot return to To Do.
+    if old_status != 'todo' and new_status == 'todo':
+        return False
+    return True
+
+
+def status_options_for(current_status):
+    statuses = ['todo', 'inprogress', 'review', 'done', 'blocked']
+    if current_status != 'todo':
+        return [s for s in statuses if s != 'todo']
+    return statuses
+
+
+def resolve_project_id(project_id):
+    if project_id and Project.query.get(project_id):
+        return project_id
+    first_project = Project.query.order_by(Project.id.asc()).first()
+    return first_project.id if first_project else None
+
+
 @tasks_bp.route('/board')
 @login_required
 def board():
-    project_id = request.args.get('project_id', 1, type=int)
+    requested_project_id = request.args.get('project_id', type=int)
     projects = Project.query.all()
+    if not projects:
+        flash('No projects found. Please create a project first.', 'warning')
+        return redirect(url_for('projects.list_projects'))
+
+    project_id = resolve_project_id(requested_project_id) or projects[0].id
     project = Project.query.get_or_404(project_id)
 
     # Filter tasks based on role
@@ -48,13 +74,17 @@ def create_task():
     projects = Project.query.all()
     users = User.query.filter_by(is_active=True).all()
 
+    if not projects:
+        flash('No projects found. Please create a project first.', 'warning')
+        return redirect(url_for('projects.list_projects'))
+
     if request.method == 'POST':
         title = request.form.get('title', '').strip()
         description = request.form.get('description', '').strip()
         status = request.form.get('status', 'todo')
         priority = request.form.get('priority', 'medium')
         task_type = request.form.get('task_type', 'task')
-        project_id = request.form.get('project_id', 1, type=int)
+        project_id = request.form.get('project_id', type=int)
         assignee_id = request.form.get('assignee_id', type=int)
         due_date_str = request.form.get('due_date', '')
         estimated_hours = request.form.get('estimated_hours', type=float)
@@ -63,6 +93,11 @@ def create_task():
         if not title:
             flash('Task title is required.', 'danger')
             return render_template('task_form.html', projects=projects, users=users, task=None)
+
+        project_id = resolve_project_id(project_id)
+        if not project_id:
+            flash('Please create a project first before creating tasks.', 'danger')
+            return redirect(url_for('projects.list_projects'))
 
         # Non-managers can only assign to themselves
         if not current_user.is_manager():
@@ -102,7 +137,12 @@ def create_task():
         return redirect(url_for('tasks.task_detail', task_id=task.id))
 
     all_tasks = Task.query.order_by(Task.id.desc()).all()
-    return render_template('task_form.html', projects=projects, users=users, task=None, all_tasks=all_tasks)
+    return render_template('task_form.html',
+                           projects=projects,
+                           users=users,
+                           task=None,
+                           all_tasks=all_tasks,
+                           allowed_statuses=['todo', 'inprogress', 'review', 'done', 'blocked'])
 
 
 @tasks_bp.route('/tasks/<int:task_id>')
@@ -125,7 +165,8 @@ def task_detail(task_id):
                            comments=comments,
                            activity=activity,
                            depends_on=depends_on,
-                           blocking=blocking)
+                           blocking=blocking,
+                           allowed_statuses=status_options_for(task.status))
 
 
 @tasks_bp.route('/tasks/<int:task_id>/edit', methods=['GET', 'POST'])
@@ -145,19 +186,21 @@ def edit_task(task_id):
         old_status = task.status
         task.title = request.form.get('title', '').strip()
         task.description = request.form.get('description', '').strip()
-        new_status = request.form.get('status', 'todo')
+        new_status = request.form.get('status', task.status)
         task.priority = request.form.get('priority', 'medium')
         task.task_type = request.form.get('task_type', 'task')
         due_date_str = request.form.get('due_date', '')
         task.estimated_hours = request.form.get('estimated_hours', type=float)
-        logged = request.form.get('logged_hours', type=float)
-        if logged is not None:
-            task.logged_hours = logged
         dependency_ids = request.form.getlist('dependencies', type=int)
 
         if current_user.is_manager():
             task.assignee_id = request.form.get('assignee_id', type=int)
             task.project_id = request.form.get('project_id', task.project_id, type=int)
+        else:
+            selected_project = request.form.get('project_id', type=int)
+            resolved_project = resolve_project_id(selected_project)
+            if resolved_project:
+                task.project_id = resolved_project
 
         task.due_date = None
         if due_date_str:
@@ -165,6 +208,15 @@ def edit_task(task_id):
                 task.due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
             except ValueError:
                 pass
+
+        if not is_valid_status_transition(old_status, new_status):
+            flash('Task cannot move back to To Do once work has started.', 'danger')
+            return render_template('task_form.html',
+                                   task=task,
+                                   projects=projects,
+                                   users=users,
+                                   all_tasks=all_tasks,
+                                   allowed_statuses=status_options_for(old_status))
 
         task.status = new_status
         if old_status != new_status:
@@ -189,7 +241,8 @@ def edit_task(task_id):
                            task=task,
                            projects=projects,
                            users=users,
-                           all_tasks=all_tasks)
+                           all_tasks=all_tasks,
+                           allowed_statuses=status_options_for(task.status))
 
 
 @tasks_bp.route('/tasks/<int:task_id>/status', methods=['POST'])
@@ -206,6 +259,9 @@ def update_status(task_id):
         return jsonify({'error': 'Permission denied'}), 403
 
     old_status = task.status
+    if not is_valid_status_transition(old_status, new_status):
+        return jsonify({'error': 'Task cannot move back to To Do once work has started.'}), 400
+
     task.status = new_status
     task.updated_at = datetime.utcnow()
     log_activity(task, f'Status changed from "{old_status}" to "{new_status}" by {current_user.full_name}')
@@ -230,6 +286,27 @@ def add_comment(task_id):
     db.session.commit()
     flash('Comment added.', 'success')
     return redirect(url_for('tasks.task_detail', task_id=task_id) + '#comments')
+
+
+@tasks_bp.route('/tasks/<int:task_id>/log-time', methods=['POST'])
+@login_required
+def log_time(task_id):
+    task = Task.query.get_or_404(task_id)
+    if not can_access_task(task):
+        abort(403)
+
+    hours = request.form.get('hours', type=float)
+    if hours is None or hours <= 0:
+        flash('Please enter a valid number of hours greater than 0.', 'danger')
+        return redirect(url_for('tasks.task_detail', task_id=task_id))
+
+    task.logged_hours = (task.logged_hours or 0) + hours
+    task.updated_at = datetime.utcnow()
+    log_activity(task, f'{current_user.full_name} logged {hours:g}h')
+    db.session.commit()
+
+    flash(f'Logged {hours:g}h to {task.task_key()}.', 'success')
+    return redirect(url_for('tasks.task_detail', task_id=task_id))
 
 
 @tasks_bp.route('/tasks/<int:task_id>/delete', methods=['POST'])

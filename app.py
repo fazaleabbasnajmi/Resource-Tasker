@@ -1,6 +1,7 @@
 from flask import Flask
 from extensions import db, login_manager, csrf
 import os
+from sqlalchemy import inspect, text
 
 
 
@@ -10,6 +11,11 @@ def create_app():
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///tasker.db')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['WTF_CSRF_ENABLED'] = True
+    app.config['MAIL_INTAKE_TOKEN'] = os.environ.get('MAIL_INTAKE_TOKEN')
+    app.config['MAIL_TASK_CREATOR'] = os.environ.get('MAIL_TASK_CREATOR', 'admin')
+    app.config['MAIL_TASK_ASSIGNEE'] = os.environ.get('MAIL_TASK_ASSIGNEE')
+    raw_project_id = os.environ.get('MAIL_TASK_PROJECT_ID')
+    app.config['MAIL_TASK_PROJECT_ID'] = int(raw_project_id) if raw_project_id and raw_project_id.isdigit() else None
 
     db.init_app(app)
     login_manager.init_app(app)
@@ -27,18 +33,34 @@ def create_app():
     from routes.auth import auth_bp
     from routes.tasks import tasks_bp
     from routes.users import users_bp
+    from routes.projects import projects_bp
+    from routes.email_intake import email_intake_bp
     from routes.main import main_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(tasks_bp)
     app.register_blueprint(users_bp)
+    app.register_blueprint(projects_bp)
+    app.register_blueprint(email_intake_bp)
     app.register_blueprint(main_bp)
 
     with app.app_context():
         db.create_all()
+        _migrate_schema()
         _seed_data()
 
     return app
+
+
+def _migrate_schema():
+    inspector = inspect(db.engine)
+    if 'task' not in inspector.get_table_names():
+        return
+
+    task_columns = {column['name'] for column in inspector.get_columns('task')}
+    if 'source_message_id' not in task_columns:
+        db.session.execute(text('ALTER TABLE task ADD COLUMN source_message_id VARCHAR(255)'))
+        db.session.commit()
 
 
 def _seed_data():
