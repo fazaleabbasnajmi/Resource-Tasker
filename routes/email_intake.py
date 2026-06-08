@@ -43,6 +43,16 @@ def _to_int(value):
         return None
 
 
+# Keywords that must appear at the START of the subject line (case-insensitive)
+SUBJECT_TRIGGER_WORDS = ('issue', 'bug', 'problem')
+
+
+def is_actionable_subject(subject: str) -> bool:
+    """Return True only if the subject starts with a recognised trigger word."""
+    clean = subject.strip().lower()
+    return any(clean.startswith(word) for word in SUBJECT_TRIGGER_WORDS)
+
+
 def create_task_from_email(payload):
     sender = (payload.get('from') or payload.get('sender') or '').strip()
     subject = (payload.get('subject') or 'Email Issue').strip()
@@ -50,6 +60,10 @@ def create_task_from_email(payload):
     html_body = (payload.get('html') or '').strip()
     body = text_body or html_body or 'No email body content provided.'
     message_id = (payload.get('message_id') or payload.get('messageId') or '').strip() or None
+
+    # Ignore emails whose subject does not start with a trigger word.
+    if not is_actionable_subject(subject):
+        return None, False, f'Subject "{subject}" does not start with a recognised trigger word (ISSUE / BUG / PROBLEM). Email ignored.'
 
     if message_id:
         existing = Task.query.filter_by(source_message_id=message_id).first()
@@ -115,6 +129,9 @@ def email_intake():
 
     task, created, error = create_task_from_email(payload)
     if error:
+        # Return 200 (not 400) for ignored emails so callers don't retry.
+        if 'ignored' in error.lower():
+            return jsonify({'success': False, 'ignored': True, 'reason': error}), 200
         return jsonify({'error': error}), 400
 
     status_code = 201 if created else 200

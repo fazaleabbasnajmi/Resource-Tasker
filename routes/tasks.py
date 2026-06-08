@@ -125,11 +125,13 @@ def create_task():
         db.session.add(task)
         db.session.flush()  # get task.id
 
-        # Add dependencies
+        # Add dependencies (guard against duplicates)
+        existing_dep_ids = {d.id for d in task.depends_on.all()}
         for dep_id in dependency_ids:
             dep = Task.query.get(dep_id)
-            if dep and dep.id != task.id:
+            if dep and dep.id != task.id and dep.id not in existing_dep_ids:
                 task.depends_on.append(dep)
+                existing_dep_ids.add(dep.id)
 
         log_activity(task, f'Task created by {current_user.full_name}')
         db.session.commit()
