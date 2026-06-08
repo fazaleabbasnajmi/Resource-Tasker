@@ -4,7 +4,7 @@ import os
 from email.header import decode_header, make_header
 
 from app import create_app
-from routes.email_intake import create_task_from_email
+from routes.email_intake import create_task_from_email, is_actionable_subject
 
 DEFAULT_IMAP_HOST = 'imap.gmail.com'
 DEFAULT_IMAP_PORT = 993
@@ -87,6 +87,7 @@ def sync_inbox():
         message_ids = data[0].split()
         created = 0
         existing = 0
+        skipped = 0
 
         for message_num in message_ids:
             status, fetched = client.fetch(message_num, '(RFC822)')
@@ -95,10 +96,18 @@ def sync_inbox():
 
             raw_email = fetched[0][1]
             message = email.message_from_bytes(raw_email)
-            subject = decode_text(message.get('Subject')) or 'Email Issue'
+            subject = decode_text(message.get('Subject')) or ''
             sender = decode_text(message.get('From'))
             message_id = decode_text(message.get('Message-ID'))
             text_body, html_body = extract_text_from_message(message)
+
+            # Skip emails that don't start with a trigger word.
+            if not is_actionable_subject(subject):
+                print(f'  Skipped (subject filter): "{subject}" from {sender}')
+                skipped += 1
+                # Mark as read so it's not re-checked next run.
+                client.store(message_num, '+FLAGS', '\\Seen')
+                continue
 
             task, was_created, error = create_task_from_email({
                 'from': sender,
@@ -118,7 +127,7 @@ def sync_inbox():
             client.store(message_num, '+FLAGS', '\\Seen')
 
         client.logout()
-        print(f'Synced inbox {username}: created={created}, existing={existing}, unread_checked={len(message_ids)}')
+        print(f'Synced inbox {username}: created={created}, existing={existing}, skipped={skipped}, unread_checked={len(message_ids)}')
 
 
 if __name__ == '__main__':

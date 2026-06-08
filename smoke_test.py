@@ -143,14 +143,14 @@ with app.test_client() as client:
         '/email/intake',
         json={
             'from': 'helpdesk@company.local',
-            'subject': f'Email Issue {uniq}',
+            'subject': f'ISSUE: Email Issue {uniq}',
             'text': 'Issue reported through email.',
             'project_id': project_id,
             'priority': 'high',
             'message_id': f'<email-{uniq}@company.local>',
         },
     )
-    assert response.status_code == 201
+    assert response.status_code == 201, response.get_data(as_text=True)
     assert response.json['success'] is True
 
     with app.app_context():
@@ -159,11 +159,12 @@ with app.test_client() as client:
         assert email_task.project_id == project_id
         assert email_task.status == 'todo'
 
+    # Duplicate of the same message ID should NOT create a new task.
     duplicate_response = client.post(
         '/email/intake',
         json={
             'from': 'helpdesk@company.local',
-            'subject': f'Email Issue {uniq}',
+            'subject': f'ISSUE: Email Issue {uniq}',
             'text': 'Issue reported through email.',
             'project_id': project_id,
             'priority': 'high',
@@ -172,6 +173,35 @@ with app.test_client() as client:
     )
     assert duplicate_response.status_code == 200
     assert duplicate_response.json['created'] is False
+
+    # Email with non-trigger subject must be IGNORED (not create a task).
+    ignored_response = client.post(
+        '/email/intake',
+        json={
+            'from': 'newsletter@company.local',
+            'subject': f'Weekly update {uniq}',
+            'text': 'Nothing actionable here.',
+            'project_id': project_id,
+            'message_id': f'<ignored-{uniq}@company.local>',
+        },
+    )
+    assert ignored_response.status_code == 200, ignored_response.get_data(as_text=True)
+    assert ignored_response.json.get('ignored') is True
+
+    # Emails starting with BUG / PROBLEM should also create tasks.
+    for prefix in ('BUG', 'PROBLEM'):
+        bug_resp = client.post(
+            '/email/intake',
+            json={
+                'from': 'tester@company.local',
+                'subject': f'{prefix}: something wrong {uniq}',
+                'text': 'Details here.',
+                'project_id': project_id,
+                'message_id': f'<{prefix.lower()}-{uniq}@company.local>',
+            },
+        )
+        assert bug_resp.status_code == 201, f'{prefix} subject should create a task: {bug_resp.get_data(as_text=True)}'
+        assert bug_resp.json['created'] is True
 
     response = client.get('/logout', follow_redirects=True)
     assert response.status_code == 200
